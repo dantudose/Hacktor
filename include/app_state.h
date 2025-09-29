@@ -1,11 +1,12 @@
 #pragma once
 
+#include <Arduino.h>
 #include <stdint.h>
 #include <time.h>
 
 namespace app_state {
 
-struct Runtime {
+struct DisplayState {
   tm currentTime{};
   int prevHourX = 0;
   int prevHourY = 0;
@@ -17,8 +18,14 @@ struct Runtime {
   int prevSecondTailY = 0;
   unsigned long lastTickMs = 0;
   unsigned long rtcBaseMs = 0;
-  uint8_t batteryPercent = 0;
-  unsigned long lastBatteryPollMs = 0;
+};
+
+struct BatteryState {
+  uint8_t percent = 0;
+  unsigned long lastPollMs = 0;
+};
+
+struct PowerState {
   bool displayOn = true;
   uint32_t displayExpireMs = 0;
   bool pendingSleep = false;
@@ -26,7 +33,12 @@ struct Runtime {
   bool tiltIrqFlag = false;
 };
 
+struct Runtime {
+  DisplayState display;
+  BatteryState battery;
+  PowerState power;
+};
+
 Runtime &get();
 
 }  // namespace app_state
-

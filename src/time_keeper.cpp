@@ -24,20 +24,22 @@ namespace time_keeper {
 
 void initializeFromCompileTime() {
   auto &state = app_state::get();
+  auto &display = state.display;
   const char *months = "JanFebMarAprMayJunJulAugSepOctNovDec";
   char mStr[4];
   int day, year, hour, min, sec;
   sscanf(__DATE__, "%3s %d %d", mStr, &day, &year);
   sscanf(__TIME__, "%d:%d:%d", &hour, &min, &sec);
   int month = static_cast<int>((strstr(months, mStr) - months) / 3) + 1;
-  state.currentTime = { sec, min, hour, day, month - 1, year - 1900 };
-  state.currentTime.tm_wday = weekdayFromDate(year, month, day);
+  display.currentTime = { sec, min, hour, day, month - 1, year - 1900 };
+  display.currentTime.tm_wday = weekdayFromDate(year, month, day);
 }
 
 void applyElapsedWalltime() {
   auto &state = app_state::get();
+  auto &display = state.display;
   unsigned long now = millis();
-  unsigned long elapsed = now - state.rtcBaseMs;
+  unsigned long elapsed = now - display.rtcBaseMs;
   if (elapsed == 0) {
     return;
   }
@@ -45,15 +47,15 @@ void applyElapsedWalltime() {
   if (secs == 0) {
     return;
   }
-  state.rtcBaseMs += secs * 1000UL;
+  display.rtcBaseMs += secs * 1000UL;
 
   for (unsigned long i = 0; i < secs; ++i) {
-    if (++state.currentTime.tm_sec >= 60) {
-      state.currentTime.tm_sec = 0;
-      if (++state.currentTime.tm_min >= 60) {
-        state.currentTime.tm_min = 0;
-        if (++state.currentTime.tm_hour >= 24) {
-          state.currentTime.tm_hour = 0;
+    if (++display.currentTime.tm_sec >= 60) {
+      display.currentTime.tm_sec = 0;
+      if (++display.currentTime.tm_min >= 60) {
+        display.currentTime.tm_min = 0;
+        if (++display.currentTime.tm_hour >= 24) {
+          display.currentTime.tm_hour = 0;
           steps::resetDailyBaseline();
         }
       }

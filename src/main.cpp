@@ -13,27 +13,28 @@
 #include "time_keeper.h"
 #include "power_manager.h"
 #include "battery_monitor.h"
-
-/* ---------------- Display ---------------- */
-Arduino_DataBus *bus = new Arduino_ESP32SPI(pins::LCD_DC, pins::LCD_CS, pins::LCD_SCK, pins::LCD_MOSI, GFX_NOT_DEFINED, HSPI);
-Arduino_GFX *gfx = new Arduino_GC9A01(bus, 3, 1, true);
+#include "display_manager.h"
 
 /* -------- Backlight PWM ramp (non-blocking) -------- */
 
 /* ISRs */
 void IRAM_ATTR imuInt1ISR() { steps::flagInterrupt(); }
 void IRAM_ATTR imuInt2ISR() { power_manager::flagTiltInterrupt(); }
-
+//bla
 /* ---------------- Setup ---------------- */
 void setup() {
 
   auto &state = app_state::get();
+  auto &displayState = state.display;
+  auto &powerState = state.power;
+  auto &batteryState = state.battery;
 
   setCpuFrequencyMhz(160);
   
   Serial.begin(115200);
 
   watchface::init();
+  display_manager::init();
   
   pinMode(pins::LCD_PWR, OUTPUT); digitalWrite(pins::LCD_PWR, HIGH);
   pinMode(pins::LCD_BL,  OUTPUT); digitalWrite(pins::LCD_BL,  HIGH);
@@ -44,8 +45,8 @@ void setup() {
   Wire.setClock(100000);
   delay(150);
 
-  gfx->begin(80000000ul);
-  gfx->fillScreen(watchface::COLOR_BG);
+  display_manager::begin();
+  display_manager::get().fillScreen(watchface::COLOR_BG);
   time_keeper::initializeFromCompileTime();
 
   if (!imu::waitWhoAmI(400))
@@ -70,140 +71,156 @@ void setup() {
     steps::init(s16);
   }
 
+  auto &display = display_manager::get();
   watchface::drawFullFaceAndHands(
-    *gfx,
-    state.currentTime,
+    display,
+    displayState.currentTime,
     steps::today(),
-    state.batteryPercent,
-    state.prevHourX, state.prevHourY,
-    state.prevMinuteX, state.prevMinuteY,
-    state.prevSecondX, state.prevSecondY,
-    state.prevSecondTailX, state.prevSecondTailY
+    batteryState.percent,
+    displayState.prevHourX, displayState.prevHourY,
+    displayState.prevMinuteX, displayState.prevMinuteY,
+    displayState.prevSecondX, displayState.prevSecondY,
+    displayState.prevSecondTailX, displayState.prevSecondTailY
   );
 
-  state.lastTickMs     = millis();
-  state.rtcBaseMs      = state.lastTickMs;
-  state.lastBatteryPollMs = millis() - 60000; // force an immediate first poll
-  state.displayOn     = true;
-  state.displayExpireMs = millis() + power_manager::DISPLAY_ON_TIMEOUT_MS;
+  displayState.lastTickMs     = millis();
+  displayState.rtcBaseMs      = displayState.lastTickMs;
+  batteryState.lastPollMs = millis() - 60000; // force an immediate first poll
+  powerState.displayOn     = true;
+  powerState.displayExpireMs = millis() + power_manager::DISPLAY_ON_TIMEOUT_MS;
   Wire.setClock(400000);
 }
 
 /* ---------------- Loop ---------------- */
-void loop() {
-  auto &state = app_state::get();
-  // Always keep the BL ramp running
-  backlight::update();
-
-  // While awake, a tilt extends screen-on timeout
-  power_manager::serviceTiltIRQ();
-
-  // Steps keep updating whether screen is on or off (IMU runs)
+namespace {
+void processSteps() {
   steps::serviceInterrupt();
   steps::pollWatchdog(millis());
+}
 
-  // Battery % (polled at 60s cadence regardless of screen state)
-  battery_monitor::poll();
-
-  // If timeout hits, begin fade-out (non-blocking) and plan to sleep later
-  if (!state.pendingSleep && millis() > state.displayExpireMs) {
+void handleDisplayTimeout() {
+  auto &state = app_state::get();
+  auto &powerState = state.power;
+  if (!powerState.pendingSleep && millis() > powerState.displayExpireMs) {
     imu::setAccelODR(0x20);     // 52 Hz while off
-    power_manager::panelSleep(*gfx, true);         // begin fade-out; panelOff happens after fade
-    state.pendingSleep = true;     // we'll sleep once fade completes and panel is off
-  }
-
-  if (state.displayOn) {
-    unsigned long now = millis();
-    unsigned long elapsed_s = (now > state.lastTickMs) ? ((now - state.lastTickMs) / 1000UL) : 0UL;
-    if (elapsed_s > 0) {
-      time_keeper::applyElapsedWalltime();   // advance currentTime by real elapsed seconds
-
-      // Compute new endpoints
-      int nhx, nhy, nmx, nmy, nsx, nsy, ntx, nty;
-      watchface::calcHourEnd(state.currentTime, nhx, nhy);
-      watchface::calcMinuteEnd(state.currentTime, nmx, nmy);
-      watchface::calcSecondEnds(state.currentTime, nsx, nsy, ntx, nty);
-
-      bool needHour   = (nhx != state.prevHourX) || (nhy != state.prevHourY);
-      bool needMinute = (nmx != state.prevMinuteX) || (nmy != state.prevMinuteY);
-
-      // Erase previous second hand only
-      gfx->drawLine(watchface::CENTER_X, watchface::CENTER_Y, state.prevSecondX, state.prevSecondY, watchface::COLOR_BG);
-      gfx->drawLine(watchface::CENTER_X, watchface::CENTER_Y, state.prevSecondTailX, state.prevSecondTailY, watchface::COLOR_BG);
-      gfx->fillCircle(watchface::CENTER_X, watchface::CENTER_Y, 6, watchface::COLOR_BG);
-
-      // Update overlays that might clear pixels (tight boxes; no overlap)
-      watchface::drawDateRotatedCWRightOfCenter(*gfx, state.currentTime);
-      watchface::drawStepsBelowCenter(*gfx, steps::today());
-      watchface::drawBatteryRotatedCWLeftOfCenter(*gfx, state.batteryPercent);
-
-      // Redraw ticks (thin and fast; placed after boxes to avoid erase)
-      watchface::drawTicks(*gfx);
-
-      // Hour/minute: only change when endpoint moves; otherwise repaint
-      if (needHour) {
-        watchface::drawThick3Line(*gfx, watchface::CENTER_X, watchface::CENTER_Y, state.prevHourX, state.prevHourY, watchface::COLOR_BG);
-        watchface::drawThick3Line(*gfx, watchface::CENTER_X, watchface::CENTER_Y, nhx, nhy, watchface::COLOR_HOUR_HAND);
-        state.prevHourX = nhx; state.prevHourY = nhy;
-      } else {
-        watchface::drawThick3Line(*gfx, watchface::CENTER_X, watchface::CENTER_Y, state.prevHourX, state.prevHourY, watchface::COLOR_HOUR_HAND);
-      }
-
-      if (needMinute) {
-        watchface::drawThick3Line(*gfx, watchface::CENTER_X, watchface::CENTER_Y, state.prevMinuteX, state.prevMinuteY, watchface::COLOR_BG);
-        watchface::drawThick3Line(*gfx, watchface::CENTER_X, watchface::CENTER_Y, nmx, nmy, watchface::COLOR_MIN_HAND);
-        state.prevMinuteX = nmx; state.prevMinuteY = nmy;
-      } else {
-        watchface::drawThick3Line(*gfx, watchface::CENTER_X, watchface::CENTER_Y, state.prevMinuteX, state.prevMinuteY, watchface::COLOR_MIN_HAND);
-      }
-
-      // Draw new second hand
-      gfx->drawLine(watchface::CENTER_X, watchface::CENTER_Y, nsx, nsy, watchface::COLOR_SEC_HAND);
-      gfx->drawLine(watchface::CENTER_X, watchface::CENTER_Y, ntx, nty, watchface::COLOR_SEC_HAND);
-      gfx->fillCircle(watchface::CENTER_X, watchface::CENTER_Y, 6, watchface::COLOR_FACE);
-      gfx->fillCircle(watchface::CENTER_X, watchface::CENTER_Y, 3, watchface::COLOR_SEC_HAND);
-      state.prevSecondX = nsx; state.prevSecondY = nsy;
-      state.prevSecondTailX = ntx; state.prevSecondTailY = nty;
-
-      state.lastTickMs += elapsed_s * 1000UL;
-    }
-  }
-
-  // If we owe a panel-off, do it after fade reaches 0
-  if (state.pendingPanelOff && backlight::isIdle()) {
-    gfx->displayOff();
-    state.pendingPanelOff = false;
-  }
-
-  // If fade-out finished and panel is off, actually enter light sleep now
-  if (state.pendingSleep && !state.pendingPanelOff && backlight::isIdle()) {
-    state.displayOn = false;
-
-    // Sleep until wrist tilt
-    power_manager::sleepUntilTilt(*gfx);            // blocks; wakes on INT2
-
-    // Wake path: panel on + fade-in (non-blocking), restore ODR
-    power_manager::panelSleep(*gfx, false);           // displayOn + fade to 255
-    imu::setAccelODR(0x40);        // 104 Hz while on
-
-    time_keeper::applyElapsedWalltime();      // catch up time
-    watchface::drawFullFaceAndHands(
-      *gfx,
-      state.currentTime,
-      steps::today(),
-      state.batteryPercent,
-      state.prevHourX, state.prevHourY,
-      state.prevMinuteX, state.prevMinuteY,
-      state.prevSecondX, state.prevSecondY,
-      state.prevSecondTailX, state.prevSecondTailY
-    );
-
-    state.displayOn        = true;
-    state.displayExpireMs = millis() + power_manager::DISPLAY_ON_TIMEOUT_MS;
-    state.lastTickMs        = millis();
-    state.rtcBaseMs         = state.lastTickMs;
-    state.pendingSleep     = false;
+    power_manager::panelSleep(true);         // begin fade-out; panelOff happens after fade
+    powerState.pendingSleep = true;
   }
 }
 
-/* ---------------- Battery helpers ---------------- */
+void refreshDisplayIfNeeded(Arduino_GFX &display) {
+  auto &state = app_state::get();
+  auto &displayState = state.display;
+  auto &powerState = state.power;
+  auto &batteryState = state.battery;
+
+  if (!powerState.displayOn) {
+    return;
+  }
+
+  unsigned long now = millis();
+  unsigned long elapsed_s = (now > displayState.lastTickMs) ? ((now - displayState.lastTickMs) / 1000UL) : 0UL;
+  if (elapsed_s == 0) {
+    return;
+  }
+
+  time_keeper::applyElapsedWalltime();
+
+  int nhx, nhy, nmx, nmy, nsx, nsy, ntx, nty;
+  watchface::calcHourEnd(displayState.currentTime, nhx, nhy);
+  watchface::calcMinuteEnd(displayState.currentTime, nmx, nmy);
+  watchface::calcSecondEnds(displayState.currentTime, nsx, nsy, ntx, nty);
+
+  bool needHour   = (nhx != displayState.prevHourX) || (nhy != displayState.prevHourY);
+  bool needMinute = (nmx != displayState.prevMinuteX) || (nmy != displayState.prevMinuteY);
+
+  display.drawLine(watchface::CENTER_X, watchface::CENTER_Y, displayState.prevSecondX, displayState.prevSecondY, watchface::COLOR_BG);
+  display.drawLine(watchface::CENTER_X, watchface::CENTER_Y, displayState.prevSecondTailX, displayState.prevSecondTailY, watchface::COLOR_BG);
+  display.fillCircle(watchface::CENTER_X, watchface::CENTER_Y, 6, watchface::COLOR_BG);
+
+  watchface::drawDateRotatedCWRightOfCenter(display, displayState.currentTime);
+  watchface::drawStepsBelowCenter(display, steps::today());
+  watchface::drawBatteryRotatedCWLeftOfCenter(display, batteryState.percent);
+  watchface::drawTicks(display);
+
+  if (needHour) {
+    watchface::drawThick3Line(display, watchface::CENTER_X, watchface::CENTER_Y, displayState.prevHourX, displayState.prevHourY, watchface::COLOR_BG);
+    watchface::drawThick3Line(display, watchface::CENTER_X, watchface::CENTER_Y, nhx, nhy, watchface::COLOR_HOUR_HAND);
+    displayState.prevHourX = nhx;
+    displayState.prevHourY = nhy;
+  } else {
+    watchface::drawThick3Line(display, watchface::CENTER_X, watchface::CENTER_Y, displayState.prevHourX, displayState.prevHourY, watchface::COLOR_HOUR_HAND);
+  }
+
+  if (needMinute) {
+    watchface::drawThick3Line(display, watchface::CENTER_X, watchface::CENTER_Y, displayState.prevMinuteX, displayState.prevMinuteY, watchface::COLOR_BG);
+    watchface::drawThick3Line(display, watchface::CENTER_X, watchface::CENTER_Y, nmx, nmy, watchface::COLOR_MIN_HAND);
+    displayState.prevMinuteX = nmx;
+    displayState.prevMinuteY = nmy;
+  } else {
+    watchface::drawThick3Line(display, watchface::CENTER_X, watchface::CENTER_Y, displayState.prevMinuteX, displayState.prevMinuteY, watchface::COLOR_MIN_HAND);
+  }
+
+  display.drawLine(watchface::CENTER_X, watchface::CENTER_Y, nsx, nsy, watchface::COLOR_SEC_HAND);
+  display.drawLine(watchface::CENTER_X, watchface::CENTER_Y, ntx, nty, watchface::COLOR_SEC_HAND);
+  display.fillCircle(watchface::CENTER_X, watchface::CENTER_Y, 6, watchface::COLOR_FACE);
+  display.fillCircle(watchface::CENTER_X, watchface::CENTER_Y, 3, watchface::COLOR_SEC_HAND);
+  displayState.prevSecondX = nsx;
+  displayState.prevSecondY = nsy;
+  displayState.prevSecondTailX = ntx;
+  displayState.prevSecondTailY = nty;
+
+  displayState.lastTickMs += elapsed_s * 1000UL;
+}
+
+void handlePendingSleep(Arduino_GFX &display) {
+  auto &state = app_state::get();
+  auto &displayState = state.display;
+  auto &powerState = state.power;
+  auto &batteryState = state.battery;
+
+  if (powerState.pendingPanelOff && backlight::isIdle()) {
+    display.displayOff();
+    powerState.pendingPanelOff = false;
+  }
+
+  if (!powerState.pendingSleep || powerState.pendingPanelOff || !backlight::isIdle()) {
+    return;
+  }
+
+  powerState.displayOn = false;
+  power_manager::sleepUntilTilt();
+  power_manager::panelSleep(false);
+  imu::setAccelODR(0x40);
+
+  time_keeper::applyElapsedWalltime();
+  watchface::drawFullFaceAndHands(
+    display,
+    displayState.currentTime,
+    steps::today(),
+    batteryState.percent,
+    displayState.prevHourX, displayState.prevHourY,
+    displayState.prevMinuteX, displayState.prevMinuteY,
+    displayState.prevSecondX, displayState.prevSecondY,
+    displayState.prevSecondTailX, displayState.prevSecondTailY
+  );
+
+  powerState.displayOn        = true;
+  powerState.displayExpireMs  = millis() + power_manager::DISPLAY_ON_TIMEOUT_MS;
+  displayState.lastTickMs     = millis();
+  displayState.rtcBaseMs      = displayState.lastTickMs;
+  powerState.pendingSleep     = false;
+}
+}  // namespace
+
+void loop() {
+  auto &display = display_manager::get();
+
+  backlight::update();
+  power_manager::serviceTiltIRQ();
+  processSteps();
+  battery_monitor::poll();
+  handleDisplayTimeout();
+  refreshDisplayIfNeeded(display);
+  handlePendingSleep(display);
+}

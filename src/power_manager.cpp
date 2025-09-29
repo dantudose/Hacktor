@@ -8,6 +8,7 @@
 #include "hardware_pins.h"
 #include "imu.h"
 #include "watchface.h"
+#include "display_manager.h"
 
 namespace {
 
@@ -33,19 +34,21 @@ void lcdBusRestore() {
 
 namespace power_manager {
 
-void panelSleep(Arduino_GFX &display, bool on) {
-  auto &state = app_state::get();
+void panelSleep(bool on) {
+  auto &powerState = app_state::get().power;
   if (on) {
     backlight::startFade(0, 1000);
-    state.pendingPanelOff = true;
+    powerState.pendingPanelOff = true;
   } else {
-    display.displayOn();
+    display_manager::get().displayOn();
     backlight::startFade(255, 50);
   }
 }
 
-void sleepUntilTilt(Arduino_GFX &display) {
-  auto &state = app_state::get();
+void sleepUntilTilt() {
+  auto &runtime = app_state::get();
+  auto &displayState = runtime.display;
+  auto &powerState = runtime.power;
 
   esp_sleep_enable_ext1_wakeup(1ULL << pins::IMU_INT2, ESP_EXT1_WAKEUP_ANY_HIGH);
 
@@ -56,7 +59,7 @@ void sleepUntilTilt(Arduino_GFX &display) {
   delay(2);
   digitalWrite(pins::LCD_PWR, LOW);
 
-  state.rtcBaseMs = millis();
+  displayState.rtcBaseMs = millis();
   setCpuFrequencyMhz(20);
   esp_light_sleep_start();
 
@@ -66,24 +69,25 @@ void sleepUntilTilt(Arduino_GFX &display) {
 
   lcdBusRestore();
 
-  display.begin(80000000ul);
-  display.fillScreen(watchface::COLOR_BG);
+  display_manager::reinitializeAfterWake();
+  display_manager::get().fillScreen(watchface::COLOR_BG);
 
   (void)imu::read8(imu::REG_TILT_SRC);
   (void)imu::read8(imu::REG_FUNC_SRC);
-  state.tiltIrqFlag = false;
+  powerState.tiltIrqFlag = false;
 }
 
 void serviceTiltIRQ() {
-  auto &state = app_state::get();
-  if (!state.tiltIrqFlag) {
+  auto &runtime = app_state::get();
+  auto &powerState = runtime.power;
+  if (!powerState.tiltIrqFlag) {
     return;
   }
-  state.tiltIrqFlag = false;
+  powerState.tiltIrqFlag = false;
   (void)imu::read8(imu::REG_TILT_SRC);
   (void)imu::read8(imu::REG_FUNC_SRC);
-  if (state.displayOn) {
-    state.displayExpireMs = millis() + DISPLAY_ON_TIMEOUT_MS;
+  if (powerState.displayOn) {
+    powerState.displayExpireMs = millis() + DISPLAY_ON_TIMEOUT_MS;
   }
 }
 
