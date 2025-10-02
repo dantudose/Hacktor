@@ -5,7 +5,7 @@
 
 #include <Arduino.h>
 #include <string.h>
-#include <stdio.h>
+#include <stdio.h> //
 
 namespace {
 int weekdayFromDate(int y, int m, int d) {
