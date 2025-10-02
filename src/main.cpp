@@ -14,6 +14,7 @@
 #include "power_manager.h"
 #include "battery_monitor.h"
 #include "display_manager.h"
+#include "ble_time_sync.h"
 
 /* -------- Backlight PWM ramp (non-blocking) -------- */
 
@@ -48,6 +49,8 @@ void setup() {
   display_manager::begin();
   display_manager::get().fillScreen(watchface::COLOR_BG);
   time_keeper::initializeFromCompileTime();
+  ble_time_sync::init();
+  ble_time_sync::requestImmediateSync();
 
   if (!imu::waitWhoAmI(400))
     Serial.println("IMU not ready (WHO_AM_I) — watchdog will poll");
@@ -215,6 +218,8 @@ void handlePendingSleep(Arduino_GFX &display) {
 
 void loop() {
   auto &display = display_manager::get();
+
+  ble_time_sync::service();
 
   backlight::update();
   power_manager::serviceTiltIRQ();

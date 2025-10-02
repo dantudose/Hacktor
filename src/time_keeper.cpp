@@ -146,6 +146,16 @@ void initializeFromCompileTime() {
   }
 }
 
+void setCurrentTime(const tm &newTime) {
+  auto &state = app_state::get();
+  auto &display = state.display;
+  unsigned long now = millis();
+  display.currentTime = newTime;
+  display.rtcBaseMs = now;
+  display.lastTickMs = now;
+  persistCurrentTime(display.currentTime);
+}
+
 void applyElapsedWalltime() {
   auto &state = app_state::get();
   auto &display = state.display;
