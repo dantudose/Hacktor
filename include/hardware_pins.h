@@ -14,6 +14,6 @@ inline constexpr uint8_t I2C_SDA  = 8;
 inline constexpr uint8_t I2C_SCL  = 9;
 inline constexpr uint8_t IMU_INT1 = 17;
 inline constexpr uint8_t IMU_INT2 = 14;
+inline constexpr uint8_t BTN_IO0  = 0;
 
 }  // namespace pins
-

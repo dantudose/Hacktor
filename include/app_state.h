@@ -18,6 +18,11 @@ struct DisplayState {
   int prevSecondTailY = 0;
   unsigned long lastTickMs = 0;
   unsigned long rtcBaseMs = 0;
+  enum class Screen : uint8_t { Watchface = 0, Info = 1 };
+  Screen activeScreen = Screen::Watchface;
+  bool infoNeedsRedraw = false;
+  uint32_t infoShownVersion = 0;
+  int infoLastDrawnSecond = -1;
 };
 
 struct BatteryState {

@@ -10,6 +10,7 @@
 #include <freertos/task.h>
 
 #include "time_keeper.h"
+#include "system_stats.h"
 #include "debug_log.h"
 
 namespace {
@@ -108,6 +109,7 @@ bool syncFromDevice(BLEAdvertisedDevice device) {
   if (decoded) {
     time_keeper::setCurrentTime(newTime);
     s_lastSyncMs = millis();
+    system_stats::recordBleSyncSuccess(newTime);
     LOG_PRINTF(1,
                "[BLE] Sync %04d-%02d-%02d %02d:%02d:%02d\n",
                newTime.tm_year + 1900,
@@ -164,6 +166,7 @@ void syncWorker(void *) {
     s_nextSyncMs = now + SYNC_INTERVAL_MS;
   } else {
     LOG_PRINT(1, "[BLE] failed; will retry later");
+    system_stats::recordBleSyncFailure();
     if (s_lastSyncMs == 0) {
       s_nextSyncMs = now + QUICK_RETRY_MS;
     } else {

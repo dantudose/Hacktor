@@ -16,6 +16,8 @@
 #include "display_manager.h"
 #include "debug_log.h"
 #include "ble_time_sync.h"
+#include "system_stats.h"
+#include "info_screen.h"
 
 /* -------- Backlight PWM ramp (non-blocking) -------- */
 
@@ -34,12 +36,14 @@ void setup() {
   setCpuFrequencyMhz(160);
   
   Serial.begin(115200);
+  system_stats::init();
 
   watchface::init();
   display_manager::init();
   
   pinMode(pins::LCD_PWR, OUTPUT); digitalWrite(pins::LCD_PWR, HIGH);
   pinMode(pins::LCD_BL,  OUTPUT); digitalWrite(pins::LCD_BL,  HIGH);
+  pinMode(pins::BTN_IO0, INPUT_PULLUP);
 
   backlight::init(pins::LCD_BL);
 
@@ -89,6 +93,10 @@ void setup() {
 
   displayState.lastTickMs     = millis();
   displayState.rtcBaseMs      = displayState.lastTickMs;
+  displayState.activeScreen   = app_state::DisplayState::Screen::Watchface;
+  displayState.infoNeedsRedraw = false;
+  displayState.infoShownVersion = system_stats::version();
+  displayState.infoLastDrawnSecond = displayState.currentTime.tm_sec;
   batteryState.lastPollMs = millis() - 60000; // force an immediate first poll
   powerState.displayOn     = true;
   powerState.displayExpireMs = millis() + power_manager::DISPLAY_ON_TIMEOUT_MS;
@@ -100,6 +108,63 @@ namespace {
 void processSteps() {
   steps::serviceInterrupt();
   steps::pollWatchdog(millis());
+}
+
+void handleInfoButton(Arduino_GFX &display) {
+  static bool lastRawState = false;
+  static bool debouncedState = false;
+  static unsigned long lastChangeMs = 0;
+
+  bool rawPressed = (digitalRead(pins::BTN_IO0) == LOW);
+  unsigned long now = millis();
+
+  if (rawPressed != lastRawState) {
+    lastChangeMs = now;
+    lastRawState = rawPressed;
+  }
+
+  if ((now - lastChangeMs) <= 50UL) {
+    return;
+  }
+
+  if (rawPressed != debouncedState) {
+    debouncedState = rawPressed;
+    if (debouncedState) {
+      auto &runtime = app_state::get();
+      auto &displayState = runtime.display;
+      auto &powerState = runtime.power;
+      auto &batteryState = runtime.battery;
+
+      powerState.displayOn = true;
+      powerState.displayExpireMs = now + power_manager::DISPLAY_ON_TIMEOUT_MS;
+
+      if (displayState.activeScreen == app_state::DisplayState::Screen::Watchface) {
+        displayState.activeScreen = app_state::DisplayState::Screen::Info;
+        displayState.infoNeedsRedraw = true;
+        displayState.infoShownVersion = 0;
+        displayState.infoLastDrawnSecond = -1;
+        displayState.lastTickMs = now;
+        displayState.rtcBaseMs = now;
+      } else {
+        displayState.activeScreen = app_state::DisplayState::Screen::Watchface;
+        watchface::drawFullFaceAndHands(
+          display,
+          displayState.currentTime,
+          steps::today(),
+          batteryState.percent,
+          displayState.prevHourX, displayState.prevHourY,
+          displayState.prevMinuteX, displayState.prevMinuteY,
+          displayState.prevSecondX, displayState.prevSecondY,
+          displayState.prevSecondTailX, displayState.prevSecondTailY
+        );
+        displayState.lastTickMs = now;
+        displayState.rtcBaseMs = now;
+        displayState.infoNeedsRedraw = false;
+        displayState.infoShownVersion = system_stats::version();
+        displayState.infoLastDrawnSecond = displayState.currentTime.tm_sec;
+      }
+    }
+  }
 }
 
 void handleDisplayTimeout() {
@@ -123,6 +188,16 @@ void refreshDisplayIfNeeded(Arduino_GFX &display) {
   }
 
   unsigned long now = millis();
+
+  if (displayState.activeScreen != app_state::DisplayState::Screen::Watchface) {
+    unsigned long elapsed_s = (now > displayState.lastTickMs) ? ((now - displayState.lastTickMs) / 1000UL) : 0UL;
+    if (elapsed_s > 0) {
+      time_keeper::applyElapsedWalltime();
+      displayState.lastTickMs += elapsed_s * 1000UL;
+    }
+    return;
+  }
+
   unsigned long elapsed_s = (now > displayState.lastTickMs) ? ((now - displayState.lastTickMs) / 1000UL) : 0UL;
   if (elapsed_s == 0) {
     return;
@@ -198,16 +273,22 @@ void handlePendingSleep(Arduino_GFX &display) {
   imu::setAccelODR(0x40);
 
   time_keeper::applyElapsedWalltime();
-  watchface::drawFullFaceAndHands(
-    display,
-    displayState.currentTime,
-    steps::today(),
-    batteryState.percent,
-    displayState.prevHourX, displayState.prevHourY,
-    displayState.prevMinuteX, displayState.prevMinuteY,
-    displayState.prevSecondX, displayState.prevSecondY,
-    displayState.prevSecondTailX, displayState.prevSecondTailY
-  );
+  if (displayState.activeScreen == app_state::DisplayState::Screen::Watchface) {
+    watchface::drawFullFaceAndHands(
+      display,
+      displayState.currentTime,
+      steps::today(),
+      batteryState.percent,
+      displayState.prevHourX, displayState.prevHourY,
+      displayState.prevMinuteX, displayState.prevMinuteY,
+      displayState.prevSecondX, displayState.prevSecondY,
+      displayState.prevSecondTailX, displayState.prevSecondTailY
+    );
+  } else {
+    displayState.infoNeedsRedraw = true;
+    displayState.infoShownVersion = 0;
+    displayState.infoLastDrawnSecond = -1;
+  }
 
   powerState.displayOn        = true;
   powerState.displayExpireMs  = millis() + power_manager::DISPLAY_ON_TIMEOUT_MS;
@@ -215,12 +296,32 @@ void handlePendingSleep(Arduino_GFX &display) {
   displayState.rtcBaseMs      = displayState.lastTickMs;
   powerState.pendingSleep     = false;
 }
+
+void renderInfoScreenIfNeeded(Arduino_GFX &display) {
+  auto &state = app_state::get();
+  auto &displayState = state.display;
+  if (displayState.activeScreen != app_state::DisplayState::Screen::Info) {
+    return;
+  }
+
+  bool statsChanged = (displayState.infoShownVersion != system_stats::version());
+  bool timeChanged = (displayState.infoLastDrawnSecond != displayState.currentTime.tm_sec);
+  if (!displayState.infoNeedsRedraw && !statsChanged && !timeChanged) {
+    return;
+  }
+
+  info_screen::draw(display, system_stats::current(), displayState.currentTime);
+  displayState.infoShownVersion = system_stats::version();
+  displayState.infoLastDrawnSecond = displayState.currentTime.tm_sec;
+  displayState.infoNeedsRedraw = false;
+}
 }  // namespace
 
 void loop() {
   auto &display = display_manager::get();
 
   ble_time_sync::service();
+  handleInfoButton(display);
 
   backlight::update();
   power_manager::serviceTiltIRQ();
@@ -228,5 +329,6 @@ void loop() {
   battery_monitor::poll();
   handleDisplayTimeout();
   refreshDisplayIfNeeded(display);
+  renderInfoScreenIfNeeded(display);
   handlePendingSleep(display);
 }
