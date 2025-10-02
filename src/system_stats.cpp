@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <string.h>
+#include <Preferences.h>
 #include "esp_system.h"
 
 namespace {
@@ -35,8 +36,8 @@ bool isHardReset(esp_reset_reason_t reason) {
   }
 }
 
-void resetStatsForHardBoot(system_stats::Stats &stats) {
-  stats.hardResetCount = 1;
+void resetStatsForHardBoot(system_stats::Stats &stats, uint32_t hardCount) {
+  stats.hardResetCount = hardCount;
   stats.softResetCount = 0;
   stats.bleSyncSuccess = 0;
   stats.bleSyncFailures = 0;
@@ -57,16 +58,28 @@ void init() {
   esp_reset_reason_t reason = esp_reset_reason();
   system_stats::Stats &stats = s_persisted.stats;
 
+  Preferences prefs;
+  prefs.begin("sysstats", false);
+
+  uint32_t storedHard = prefs.getUInt("hard", 0);
+
   if (isHardReset(reason)) {
-    resetStatsForHardBoot(stats);
+    uint32_t newHard = storedHard + 1;
+    resetStatsForHardBoot(stats, newHard);
+    prefs.putUInt("hard", newHard);
+    prefs.putUInt("soft", stats.softResetCount);
   } else {
+    stats.hardResetCount = storedHard;
     stats.softResetCount += 1;
+    prefs.putUInt("soft", stats.softResetCount);
     if (stats.hardResetCount == 0) {
-      stats.hardResetCount = 1;
+      stats.hardResetCount = storedHard == 0 ? 1 : storedHard;
     }
   }
   stats.lastResetReason = static_cast<uint8_t>(reason);
   ++s_version;
+
+  prefs.end();
 }
 
 void recordBleSyncSuccess(const tm &syncedTime) {
