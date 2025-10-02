@@ -6,7 +6,7 @@
 
 namespace power_manager {
 
-inline constexpr uint32_t DISPLAY_ON_TIMEOUT_MS = 8000;  // time the screen stays on after last activity
+inline constexpr uint32_t DISPLAY_ON_TIMEOUT_MS = 10000;  // time the screen stays on after last activity
 
 void panelSleep(bool on);
 void sleepUntilTilt();

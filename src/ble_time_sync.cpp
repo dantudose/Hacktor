@@ -10,6 +10,7 @@
 #include <freertos/task.h>
 
 #include "time_keeper.h"
+#include "debug_log.h"
 
 namespace {
 
@@ -74,20 +75,20 @@ bool decodeCurrentTime(const uint8_t *data, size_t len, tm &out) {
 bool syncFromDevice(BLEAdvertisedDevice device) {
   BLEClient *client = BLEDevice::createClient();
   if (client == nullptr) {
-    Serial.println("[BLE] Failed to create client");
+    LOG_PRINT(1, "[BLE] Failed to create client");
     return false;
   }
 
   bool connected = client->connect(device.getAddress(), device.getAddressType());
   if (!connected) {
-    Serial.println("[BLE] Connect failed");
+    LOG_PRINT(1, "[BLE] Connect failed");
     delete client;
     return false;
   }
 
   BLERemoteService *service = client->getService(ctsServiceUuid);
   if (service == nullptr) {
-    Serial.println("[BLE] CTS service missing");
+    LOG_PRINT(1, "[BLE] CTS service missing");
     client->disconnect();
     delete client;
     return false;
@@ -95,7 +96,7 @@ bool syncFromDevice(BLEAdvertisedDevice device) {
 
   BLERemoteCharacteristic *characteristic = service->getCharacteristic(currentTimeCharUuid);
   if (characteristic == nullptr) {
-    Serial.println("[BLE] Current Time char missing");
+    LOG_PRINT(1, "[BLE] Current Time char missing");
     client->disconnect();
     delete client;
     return false;
@@ -107,15 +108,16 @@ bool syncFromDevice(BLEAdvertisedDevice device) {
   if (decoded) {
     time_keeper::setCurrentTime(newTime);
     s_lastSyncMs = millis();
-    Serial.printf("[BLE] Sync %04d-%02d-%02d %02d:%02d:%02d\n",
-                  newTime.tm_year + 1900,
-                  newTime.tm_mon + 1,
-                  newTime.tm_mday,
-                  newTime.tm_hour,
-                  newTime.tm_min,
-                  newTime.tm_sec);
+    LOG_PRINTF(1,
+               "[BLE] Sync %04d-%02d-%02d %02d:%02d:%02d\n",
+               newTime.tm_year + 1900,
+               newTime.tm_mon + 1,
+               newTime.tm_mday,
+               newTime.tm_hour,
+               newTime.tm_min,
+               newTime.tm_sec);
   } else {
-    Serial.println("[BLE] Decode failed");
+    LOG_PRINT(1, "[BLE] Decode failed");
   }
 
   client->disconnect();
@@ -135,12 +137,12 @@ bool attemptSync() {
   }
 
   bool success = false;
-  Serial.printf("[BLE] Scan found %d device(s)\n", results->getCount());
+  LOG_PRINTF(1, "[BLE] Scan found %d device(s)\n", results->getCount());
   for (int i = 0; i < results->getCount(); ++i) {
     BLEAdvertisedDevice device = results->getDevice(i);
-    Serial.printf("[BLE] Device %d: %s\n", i, device.toString().c_str());
+    LOG_PRINTF(1, "[BLE] Device %d: %s\n", i, device.toString().c_str());
     if (device.haveServiceUUID() && device.isAdvertisingService(ctsServiceUuid)) {
-      Serial.println("[BLE] Found CTS advert, attempting sync");
+      LOG_PRINT(1, "[BLE] Found CTS advert, attempting sync");
       success = syncFromDevice(device);
       if (success) {
         break;
@@ -149,7 +151,7 @@ bool attemptSync() {
   }
   scan->clearResults();
   if (!success) {
-    Serial.println("[BLE] No CTS sync succeeded this scan");
+    LOG_PRINT(1, "[BLE] No CTS sync succeeded this scan");
   }
   return success;
 }
@@ -158,10 +160,10 @@ void syncWorker(void *) {
   bool ok = attemptSync();
   unsigned long now = millis();
   if (ok) {
-    Serial.println("[BLE] synchronized");
+    LOG_PRINT(1, "[BLE] synchronized");
     s_nextSyncMs = now + SYNC_INTERVAL_MS;
   } else {
-    Serial.println("[BLE] failed; will retry later");
+    LOG_PRINT(1, "[BLE] failed; will retry later");
     if (s_lastSyncMs == 0) {
       s_nextSyncMs = now + QUICK_RETRY_MS;
     } else {

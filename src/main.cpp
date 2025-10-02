@@ -14,6 +14,7 @@
 #include "power_manager.h"
 #include "battery_monitor.h"
 #include "display_manager.h"
+#include "debug_log.h"
 #include "ble_time_sync.h"
 
 /* -------- Backlight PWM ramp (non-blocking) -------- */
@@ -53,15 +54,15 @@ void setup() {
   ble_time_sync::requestImmediateSync();
 
   if (!imu::waitWhoAmI(400))
-    Serial.println("IMU not ready (WHO_AM_I) — watchdog will poll");
+    LOG_PRINT(1, "IMU not ready (WHO_AM_I) — watchdog will poll");
 
   imu::softReset();
   uint16_t initialSteps = 0;
   bool pedo_ok = imu::enableHardwarePedometer(initialSteps);
   steps::init(initialSteps);
-  Serial.printf("Hardware pedometer: %s\n", pedo_ok ? "OK" : "FAILED");
+  LOG_PRINTF(1, "Hardware pedometer: %s\n", pedo_ok ? "OK" : "FAILED");
   bool tilt_ok = imu::enableTiltOnInt2();
-  Serial.printf("Tilt on INT2: %s\n", tilt_ok ? "OK" : "FAILED");
+  LOG_PRINTF(1, "Tilt on INT2: %s\n", tilt_ok ? "OK" : "FAILED");
 
   pinMode(pins::IMU_INT1, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(pins::IMU_INT1), imuInt1ISR, RISING);
