@@ -37,21 +37,18 @@ class ArduinoGraphicsAdapter final : public graphics::Graphics {
   uint8_t getRotation() const override { return impl_.getRotation(); }
   void setRotation(uint8_t rotation) override { impl_.setRotation(rotation); }
 
-  void setCursor(int16_t x, int16_t y) override { impl_.setCursor(x, y); }
-  void setTextColor(uint16_t foreground, uint16_t background) override {
-    impl_.setTextColor(foreground, background);
-  }
-  void setTextSize(uint8_t size) override { impl_.setTextSize(size); }
-  void setTextWrap(bool wrap) override { impl_.setTextWrap(wrap); }
-  void print(const char *text) override { impl_.print(text); }
-
-  void getTextBounds(
-    const char *text,
+  void drawText(
     int16_t x, int16_t y,
-    int16_t *x1, int16_t *y1,
-    uint16_t *w, uint16_t *h
+    const char *text,
+    uint16_t colorText, uint16_t colorBG,
+    uint8_t textSize
   ) override {
-    impl_.getTextBounds(text, x, y, x1, y1, w, h);
+    impl_.setTextWrap(false);
+    impl_.setTextSize(textSize);
+    impl_.setTextColor(colorText, colorBG);
+    impl_.setCursor(x, y);
+    impl_.print(text);
+    impl_.setTextWrap(true);
   }
 
   int16_t width() const override { return impl_.width(); }

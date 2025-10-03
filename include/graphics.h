@@ -23,17 +23,11 @@ class Graphics {
   virtual uint8_t getRotation() const = 0;
   virtual void setRotation(uint8_t rotation) = 0;
 
-  virtual void setCursor(int16_t x, int16_t y) = 0;
-  virtual void setTextColor(uint16_t foreground, uint16_t background) = 0;
-  virtual void setTextSize(uint8_t size) = 0;
-  virtual void setTextWrap(bool wrap) = 0;
-  virtual void print(const char *text) = 0;
-
-  virtual void getTextBounds(
-    const char *text,
+  virtual void drawText(
     int16_t x, int16_t y,
-    int16_t *x1, int16_t *y1,
-    uint16_t *w, uint16_t *h
+    const char *text,
+    uint16_t colorText, uint16_t colorBG,
+    uint8_t textSize
   ) = 0;
 
   virtual int16_t width() const = 0;

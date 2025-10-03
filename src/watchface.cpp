@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "graphics_utils.h"
+
 namespace watchface {
 
 namespace {
@@ -32,8 +34,7 @@ void drawRotatedLabelBoxedCW(
   const int Xtl = centerX - textH / 2;
   const int Ytl = centerY - textW_max / 2;
 
-  uint8_t oldRot = display.getRotation();
-  display.setRotation((oldRot + 1) % 4);
+  graphics::RotationScopeCW rotation(display);
 
   const int u = Ytl;
   const int v = (WIDTH - 1) - Xtl;
@@ -46,12 +47,7 @@ void drawRotatedLabelBoxedCW(
   const int u_text = u + (textH - curW) / 2;
   const int v_text = v + (textW_max - curH) / 2;
 
-  display.setTextSize(textSize);
-  display.setTextColor(colorText, colorBG);
-  display.setCursor(u_text, v_text);
-  display.print(text);
-
-  display.setRotation(oldRot);
+  display.drawText(u_text, v_text, text, colorText, colorBG, textSize);
 }
 
 void drawRotatedBatteryIconBoxedCW(
@@ -68,8 +64,7 @@ void drawRotatedBatteryIconBoxedCW(
   const int Xtl = centerX - reserveH / 2;
   const int Ytl = centerY - reserveW / 2;
 
-  uint8_t oldRot = display.getRotation();
-  display.setRotation((oldRot + 1) % 4);
+  graphics::RotationScopeCW rotation(display);
 
   const int u = Ytl;
   const int v = (WIDTH - 1) - Xtl;
@@ -96,8 +91,6 @@ void drawRotatedBatteryIconBoxedCW(
   if (fillW > 0) {
     display.fillRect(innerX, innerY, fillW, innerH, colorFG);
   }
-
-  display.setRotation(oldRot);
 }
 
 void drawStaticFace(

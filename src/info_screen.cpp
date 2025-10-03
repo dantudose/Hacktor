@@ -1,8 +1,10 @@
 #include "info_screen.h"
 
 #include <cstdio>
+#include <cstring>
 
 #include "watchface.h"
+#include "graphics_utils.h"
 #include "esp_system.h"
 
 namespace info_screen {
@@ -57,25 +59,26 @@ void formatBleSync(const system_stats::Stats &stats, char *buffer, size_t len) {
 }  // namespace
 
 void draw(graphics::Graphics &display, const system_stats::Stats &stats, const tm &currentTime) {
-  uint8_t oldRotation = display.getRotation();
-  uint8_t infoRotation = (oldRotation + 1) % 4;  // rotate 90° clockwise
-  display.setRotation(infoRotation);
+  graphics::RotationScopeCW rotation(display);
 
   display.fillScreen(COLOR_BG);
-  display.setTextColor(COLOR_TEXT, COLOR_BG);
-  display.setTextWrap(false);
+
+  constexpr int glyphWBase = 6;
+  constexpr int glyphHBase = 8;
+
+  auto textMetrics = [&](const char *text, uint8_t textSize, uint16_t &w, uint16_t &h) {
+    w = static_cast<uint16_t>(std::strlen(text) * glyphWBase * textSize);
+    h = static_cast<uint16_t>(glyphHBase * textSize);
+  };
 
   int cursorY = 18;
 
   auto printCentered = [&](uint8_t textSize, const char *text, int spacing) {
-    display.setTextSize(textSize);
-    int16_t x1, y1;
     uint16_t w, h;
-    display.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
-    int16_t x = static_cast<int16_t>((display.width() - w) / 2 - x1);
-    display.setCursor(x, cursorY);
-    display.print(text);
-    cursorY += h + spacing;
+    textMetrics(text, textSize, w, h);
+    int16_t x = static_cast<int16_t>((display.width() - static_cast<int16_t>(w)) / 2);
+    display.drawText(x, cursorY, text, COLOR_TEXT, COLOR_BG, textSize);
+    cursorY += static_cast<int>(h) + spacing;
   };
 
   printCentered(2, "INFO", 10);
@@ -115,8 +118,6 @@ void draw(graphics::Graphics &display, const system_stats::Stats &stats, const t
   std::snprintf(line, sizeof(line), "Reset reason: %s", resetReasonToString(stats.lastResetReason));
   printCentered(1, line, 0);
 
-  display.setTextWrap(true);
-  display.setRotation(oldRotation);
 }
 
 }  // namespace info_screen
