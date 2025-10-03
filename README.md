@@ -11,6 +11,7 @@ Features:
 * Date & time sync over BLE
 * Info & debug screen (press IO0)
 * Battery level display
+* Persistent step counter, date & time after soft/hard reset
 
 
 ## License Information
