@@ -407,6 +407,23 @@ void Gc9a01Graphics::drawPixel(int16_t x, int16_t y, uint16_t color) {
   endWrite();
 }
 
+void Gc9a01Graphics::pushPixels(const uint16_t *pixels, size_t count) {
+  constexpr size_t kChunk = 64;
+  uint8_t buffer[kChunk * 2];
+  while (count > 0) {
+    size_t batch = std::min(count, kChunk);
+    for (size_t i = 0; i < batch; ++i) {
+      uint16_t value = pixels[i];
+      buffer[2 * i]     = static_cast<uint8_t>(value >> 8);
+      buffer[2 * i + 1] = static_cast<uint8_t>(value & 0xFF);
+    }
+    writeData(buffer, batch * 2);
+    pixels += batch;
+    count  -= batch;
+  }
+}
+
+
 void Gc9a01Graphics::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color) {
   if (x0 == x1) {
     if (y0 > y1) std::swap(y0, y1);
@@ -528,22 +545,45 @@ void Gc9a01Graphics::drawChar(int16_t x, int16_t y, char c,
   if (c < 0x20 || c > 0x7F) {
     c = '?';
   }
-  const uint8_t *glyph = kFont5x7[c - 0x20];
-  if (colorBG != colorText) {
-    fillRect(x, y, 6 * textSize, 8 * textSize, colorBG);
+  if (textSize == 0) {
+    return;
   }
-  for (int8_t col = 0; col < 5; ++col) {
+
+  constexpr int kBaseW = 6;
+  constexpr int kBaseH = 8;
+  constexpr int kMaxScale = 4;
+  static uint16_t glyphPixels[kBaseW * kBaseH * kMaxScale * kMaxScale];
+
+  int scale = textSize;
+  if (scale > kMaxScale) {
+    scale = kMaxScale;
+  }
+
+  const int glyphW = kBaseW * scale;
+  const int glyphH = kBaseH * scale;
+  const size_t totalPixels = static_cast<size_t>(glyphW) * static_cast<size_t>(glyphH);
+
+  std::fill_n(glyphPixels, totalPixels, colorBG);
+
+  const uint8_t *glyph = kFont5x7[c - 0x20];
+  for (int col = 0; col < 5; ++col) {
     uint8_t bits = glyph[col];
-    for (int8_t row = 0; row < 7; ++row) {
+    for (int row = 0; row < 7; ++row) {
       if (bits & (1 << row)) {
-        fillRect(x + col * textSize,
-                 y + row * textSize,
-                 textSize,
-                 textSize,
-                 colorText);
+        for (int dy = 0; dy < scale; ++dy) {
+          uint16_t *dest = glyphPixels + (row * scale + dy) * glyphW + col * scale;
+          for (int dx = 0; dx < scale; ++dx) {
+            dest[dx] = colorText;
+          }
+        }
       }
     }
   }
+
+  startWrite();
+  setAddrWindow(x, y, x + glyphW - 1, y + glyphH - 1);
+  pushPixels(glyphPixels, totalPixels);
+  endWrite();
 }
 
 void Gc9a01Graphics::drawText(int16_t x, int16_t y,
@@ -551,16 +591,27 @@ void Gc9a01Graphics::drawText(int16_t x, int16_t y,
                               uint16_t colorText, uint16_t colorBG,
                               uint8_t textSize) {
   if (!text) return;
+
+  constexpr int kBaseW = 6;
+  constexpr int kBaseH = 8;
+  constexpr int kMaxScale = 4;
+  int scale = textSize == 0 ? 1 : textSize;
+  if (scale > kMaxScale) {
+    scale = kMaxScale;
+  }
+  const int advance = kBaseW * scale;
+  const int lineAdvance = kBaseH * scale;
+
   int16_t cursorX = x;
   while (*text) {
     if (*text == '\n') {
       cursorX = x;
-      y += 8 * textSize;
+      y += lineAdvance;
       ++text;
       continue;
     }
-    drawChar(cursorX, y, *text, colorText, colorBG, textSize);
-    cursorX += 6 * textSize;
+    drawChar(cursorX, y, *text, colorText, colorBG, scale);
+    cursorX += advance;
     ++text;
   }
 }

@@ -52,6 +52,7 @@ class Gc9a01Graphics : public Graphics {
   void writeData16Repeat(uint16_t value, size_t count);
   void setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1);
   void drawPixel(int16_t x, int16_t y, uint16_t color);
+  void pushPixels(const uint16_t *pixels, size_t count);
   void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color);
   void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color);
   void drawChar(int16_t x, int16_t y, char c,
