@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Arduino_GFX_Library.h>
-
 #include "app_state.h"
 
 namespace power_manager {
@@ -16,3 +14,4 @@ inline void flagTiltInterrupt() {
 }
 
 }  // namespace power_manager
+

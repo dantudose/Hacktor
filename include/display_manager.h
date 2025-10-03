@@ -1,11 +1,11 @@
 #pragma once
 
-#include <Arduino_GFX_Library.h>
+#include "graphics.h"
 
 namespace display_manager {
 
 void init();
-Arduino_GFX &get();
+graphics::Graphics &get();
 void begin(uint32_t freq_hz = 80000000ul);
 void reinitializeAfterWake();
 

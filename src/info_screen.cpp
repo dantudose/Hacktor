@@ -56,7 +56,7 @@ void formatBleSync(const system_stats::Stats &stats, char *buffer, size_t len) {
 
 }  // namespace
 
-void draw(Arduino_GFX &display, const system_stats::Stats &stats, const tm &currentTime) {
+void draw(graphics::Graphics &display, const system_stats::Stats &stats, const tm &currentTime) {
   uint8_t oldRotation = display.getRotation();
   uint8_t infoRotation = (oldRotation + 1) % 4;  // rotate 90° clockwise
   display.setRotation(infoRotation);

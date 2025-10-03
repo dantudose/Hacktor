@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <Arduino_GFX_Library.h>
+#include "graphics.h"
 #include <math.h>
 #include <time.h>
 #include "imu.h"
@@ -110,7 +110,7 @@ void processSteps() {
   steps::pollWatchdog(millis());
 }
 
-void handleInfoButton(Arduino_GFX &display) {
+void handleInfoButton(graphics::Graphics &display) {
   static bool lastRawState = false;
   static bool debouncedState = false;
   static unsigned long lastChangeMs = 0;
@@ -177,7 +177,7 @@ void handleDisplayTimeout() {
   }
 }
 
-void refreshDisplayIfNeeded(Arduino_GFX &display) {
+void refreshDisplayIfNeeded(graphics::Graphics &display) {
   auto &state = app_state::get();
   auto &displayState = state.display;
   auto &powerState = state.power;
@@ -252,7 +252,7 @@ void refreshDisplayIfNeeded(Arduino_GFX &display) {
   displayState.lastTickMs += elapsed_s * 1000UL;
 }
 
-void handlePendingSleep(Arduino_GFX &display) {
+void handlePendingSleep(graphics::Graphics &display) {
   auto &state = app_state::get();
   auto &displayState = state.display;
   auto &powerState = state.power;
@@ -297,7 +297,7 @@ void handlePendingSleep(Arduino_GFX &display) {
   powerState.pendingSleep     = false;
 }
 
-void renderInfoScreenIfNeeded(Arduino_GFX &display) {
+void renderInfoScreenIfNeeded(graphics::Graphics &display) {
   auto &state = app_state::get();
   auto &displayState = state.display;
   if (displayState.activeScreen != app_state::DisplayState::Screen::Info) {

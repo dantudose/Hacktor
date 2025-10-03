@@ -1,6 +1,5 @@
 #include "watchface.h"
 
-#include <Arduino_GFX_Library.h>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -16,7 +15,7 @@ inline int32_t mulFixed(int32_t c, int r) {
 }
 
 void drawRotatedLabelBoxedCW(
-  Arduino_GFX &display,
+  graphics::Graphics &display,
   int centerX, int centerY,
   const char *text,
   uint16_t colorText,
@@ -56,7 +55,7 @@ void drawRotatedLabelBoxedCW(
 }
 
 void drawRotatedBatteryIconBoxedCW(
-  Arduino_GFX &display,
+  graphics::Graphics &display,
   int centerX, int centerY,
   uint16_t colorFG, uint16_t colorBG,
   int reserveW, int reserveH,
@@ -102,7 +101,7 @@ void drawRotatedBatteryIconBoxedCW(
 }
 
 void drawStaticFace(
-  Arduino_GFX &display,
+  graphics::Graphics &display,
   const tm &currentTime,
   uint32_t stepsToday,
   uint8_t batteryPercent
@@ -123,7 +122,7 @@ void init() {
   }
 }
 
-void drawTicks(Arduino_GFX &display) {
+void drawTicks(graphics::Graphics &display) {
   for (int i = 0; i < 60; ++i) {
     int32_t cx = COS60[i];
     int32_t sy = SIN60[i];
@@ -160,7 +159,7 @@ void drawTicks(Arduino_GFX &display) {
   }
 }
 
-void drawDateRotatedCWRightOfCenter(Arduino_GFX &display, const tm &currentTime) {
+void drawDateRotatedCWRightOfCenter(graphics::Graphics &display, const tm &currentTime) {
   static const char *WNAME[] = {"SUN","MON","TUE","WED","THU","FRI","SAT"};
   char weekStr[4];
   std::snprintf(weekStr, sizeof(weekStr), "%s", WNAME[currentTime.tm_wday]);
@@ -197,13 +196,13 @@ void drawDateRotatedCWRightOfCenter(Arduino_GFX &display, const tm &currentTime)
   );
 }
 
-void drawStepsBelowCenter(Arduino_GFX &display, uint32_t stepsToday) {
+void drawStepsBelowCenter(graphics::Graphics &display, uint32_t stepsToday) {
   char buf[16];
   std::snprintf(buf, sizeof(buf), "%lu", static_cast<unsigned long>(stepsToday));
   drawRotatedLabelBoxedCW(display, CENTER_X - 25, CENTER_Y + 30, buf, COLOR_STEPS, COLOR_BG, 2, 6);
 }
 
-void drawBatteryRotatedCWLeftOfCenter(Arduino_GFX &display, uint8_t batteryPercent) {
+void drawBatteryRotatedCWLeftOfCenter(graphics::Graphics &display, uint8_t batteryPercent) {
   char numStr[4];
   std::snprintf(numStr, sizeof(numStr), "%u", static_cast<unsigned>(batteryPercent));
   const char *pctStr = "%";
@@ -260,14 +259,14 @@ void drawBatteryRotatedCWLeftOfCenter(Arduino_GFX &display, uint8_t batteryPerce
   );
 }
 
-void drawThick3Line(Arduino_GFX &display, int x0, int y0, int x1, int y1, uint16_t color) {
+void drawThick3Line(graphics::Graphics &display, int x0, int y0, int x1, int y1, uint16_t color) {
   display.drawLine(x0, y0, x1, y1, color);
   display.drawLine(x0 - 1, y0 - 1, x1 - 1, y1 - 1, color);
   display.drawLine(x0 + 1, y0 + 1, x1 + 1, y1 + 1, color);
 }
 
 void drawFullFaceAndHands(
-  Arduino_GFX &display,
+  graphics::Graphics &display,
   const tm &currentTime,
   uint32_t stepsToday,
   uint8_t batteryPercent,
