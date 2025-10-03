@@ -392,11 +392,42 @@ void Gc9a01Graphics::drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16
 }
 
 void Gc9a01Graphics::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
-  fillRect(x, y, 1, h, color);
+  if (h <= 0) return;
+  if (x < 0 || x >= width_) return;
+  if (y < 0) {
+    h += y;
+    y = 0;
+  }
+  if (y + h > height_) {
+    h = height_ - y;
+  }
+  if (h <= 0) return;
+  startWrite();
+  setAddrWindow(x, y, x, y + h - 1);
+  writeData16Repeat(color, h);
+  endWrite();
 }
 
 void Gc9a01Graphics::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
-  fillRect(x, y, w, 1, color);
+  if (w <= 0) return;
+  fillSpan(x, x + w - 1, y, color);
+}
+
+void Gc9a01Graphics::fillSpanInternal(int16_t x0, int16_t x1, int16_t y, uint16_t color) {
+  if (y < 0 || y >= height_) return;
+  if (x0 > x1) std::swap(x0, x1);
+  if (x1 < 0 || x0 >= width_) return;
+  if (x0 < 0) x0 = 0;
+  if (x1 >= width_) x1 = width_ - 1;
+  startWrite();
+  setAddrWindow(x0, y, x1, y);
+  int count = x1 - x0 + 1;
+  writeData16Repeat(color, count);
+  endWrite();
+}
+
+void Gc9a01Graphics::fillSpan(int16_t x0, int16_t x1, int16_t y, uint16_t color) {
+  fillSpanInternal(x0, x1, y, color);
 }
 
 void Gc9a01Graphics::drawPixel(int16_t x, int16_t y, uint16_t color) {
@@ -470,20 +501,15 @@ void Gc9a01Graphics::fillTriangle(int16_t x0, int16_t y0,
     return x0 + (int32_t)(x1 - x0) * (y - y0) / (y1 - y0);
   };
 
-  auto drawSpan = [&](int16_t y, int16_t xa, int16_t xb) {
-    if (xa > xb) std::swap(xa, xb);
-    drawFastHLine(xa, y, xb - xa + 1, color);
-  };
-
   for (int16_t y = y0; y <= y1; ++y) {
     int16_t xa = edgeInterpolate(y0, x0, y2, x2, y);
     int16_t xb = edgeInterpolate(y0, x0, y1, x1, y);
-    drawSpan(y, xa, xb);
+    fillSpan(xa, xb, y, color);
   }
   for (int16_t y = y1 + 1; y <= y2; ++y) {
     int16_t xa = edgeInterpolate(y0, x0, y2, x2, y);
     int16_t xb = edgeInterpolate(y1, x1, y2, x2, y);
-    drawSpan(y, xa, xb);
+    fillSpan(xa, xb, y, color);
   }
 }
 

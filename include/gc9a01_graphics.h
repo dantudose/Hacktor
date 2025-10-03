@@ -25,6 +25,7 @@ class Gc9a01Graphics : public Graphics {
                     int16_t x2, int16_t y2,
                     uint16_t color) override;
   void fillCircle(int16_t x0, int16_t y0, int16_t r, uint16_t color) override;
+  void fillSpan(int16_t x0, int16_t x1, int16_t y, uint16_t color);
 
   uint8_t getRotation() const override;
   void setRotation(uint8_t rotation) override;
@@ -53,6 +54,7 @@ class Gc9a01Graphics : public Graphics {
   void setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1);
   void drawPixel(int16_t x, int16_t y, uint16_t color);
   void pushPixels(const uint16_t *pixels, size_t count);
+  void fillSpanInternal(int16_t x0, int16_t x1, int16_t y, uint16_t color);
   void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color);
   void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color);
   void drawChar(int16_t x, int16_t y, char c,
