@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "graphics_utils.h"
+#include "debug_log.h"
 
 namespace watchface {
 
@@ -268,6 +269,9 @@ void drawFullFaceAndHands(
   int &prev_sx, int &prev_sy,
   int &prev_stx, int &prev_sty
 ) {
+#if HACKTOR_DEBUG_LEVEL >= 1
+  uint32_t startUs = micros();
+#endif
   display.fillScreen(COLOR_BG);
   drawStaticFace(display, currentTime, stepsToday, batteryPercent);
 
@@ -287,6 +291,10 @@ void drawFullFaceAndHands(
   prev_mx = mx; prev_my = my;
   prev_sx = sx; prev_sy = sy;
   prev_stx = tx; prev_sty = ty;
+#if HACKTOR_DEBUG_LEVEL >= 1
+  uint32_t elapsedUs = micros() - startUs;
+  LOG_PRINTF(1, "[display] full face %lu us\n", static_cast<unsigned long>(elapsedUs));
+#endif
 }
 
 void calcHourEnd(const tm &currentTime, int &hx, int &hy) {

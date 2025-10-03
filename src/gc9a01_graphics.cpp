@@ -357,10 +357,27 @@ void Gc9a01Graphics::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16
   if (x < 0) x = 0;
   if (y < 0) y = 0;
 
+  const int16_t spanWidth = x1 - x + 1;
+  const int16_t spanHeight = y1 - y + 1;
+
   startWrite();
   setAddrWindow(x, y, x1, y1);
-  size_t count = static_cast<size_t>(x1 - x + 1) * static_cast<size_t>(y1 - y + 1);
-  writeData16Repeat(color, count);
+
+  static uint8_t lineBuf[240 * 2];
+  const uint8_t hi = static_cast<uint8_t>(color >> 8);
+  const uint8_t lo = static_cast<uint8_t>(color & 0xFF);
+  const int bytesPerLine = spanWidth * 2;
+  if (bytesPerLine > static_cast<int>(sizeof(lineBuf))) {
+    endWrite();
+    return;
+  }
+  for (int16_t i = 0; i < spanWidth; ++i) {
+    lineBuf[i * 2]     = hi;
+    lineBuf[i * 2 + 1] = lo;
+  }
+  for (int16_t row = 0; row < spanHeight; ++row) {
+    writeData(lineBuf, bytesPerLine);
+  }
   endWrite();
 }
 
