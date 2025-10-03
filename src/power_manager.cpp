@@ -65,7 +65,7 @@ void sleepUntilTilt() {
 
   setCpuFrequencyMhz(160);
   digitalWrite(pins::LCD_PWR, HIGH);
-  delay(5);
+  delay(20);
 
   lcdBusRestore();
 
