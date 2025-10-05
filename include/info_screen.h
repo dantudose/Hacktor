@@ -7,7 +7,7 @@
 
 namespace info_screen {
 
-void draw(graphics::Graphics &display, const system_stats::Stats &stats, const tm &currentTime);
+void draw(graphics::Graphics &display, const system_stats::Stats &stats, const tm &currentTime, uint8_t batteryPercent, float batteryVoltage);
 
 }  // namespace info_screen
 

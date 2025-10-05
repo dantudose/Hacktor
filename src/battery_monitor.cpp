@@ -23,6 +23,11 @@ void poll() {
     if (soc > 100.0f) soc = 100.0f;
     battery.percent = static_cast<uint8_t>(lroundf(soc));
   }
+
+  float volts;
+  if (fuel_gauge::readVoltage(volts)) {
+    battery.voltage = volts;
+  }
 }
 
 }  // namespace battery_monitor

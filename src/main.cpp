@@ -310,7 +310,8 @@ void renderInfoScreenIfNeeded(graphics::Graphics &display) {
     return;
   }
 
-  info_screen::draw(display, system_stats::current(), displayState.currentTime);
+  auto &batteryState = state.battery;
+  info_screen::draw(display, system_stats::current(), displayState.currentTime, batteryState.percent, batteryState.voltage);
   displayState.infoShownVersion = system_stats::version();
   displayState.infoLastDrawnSecond = displayState.currentTime.tm_sec;
   displayState.infoNeedsRedraw = false;

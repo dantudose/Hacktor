@@ -58,7 +58,7 @@ void formatBleSync(const system_stats::Stats &stats, char *buffer, size_t len) {
 
 }  // namespace
 
-void draw(graphics::Graphics &display, const system_stats::Stats &stats, const tm &currentTime) {
+void draw(graphics::Graphics &display, const system_stats::Stats &stats, const tm &currentTime, uint8_t batteryPercent, float batteryVoltage) {
   graphics::RotationScopeCW rotation(display);
 
   display.fillScreen(COLOR_BG);
@@ -116,6 +116,11 @@ void draw(graphics::Graphics &display, const system_stats::Stats &stats, const t
   printCentered(1, dateLine, 6);
 
   std::snprintf(line, sizeof(line), "Reset reason: %s", resetReasonToString(stats.lastResetReason));
+  printCentered(1, line, 6);
+
+  std::snprintf(line, sizeof(line), "Battery: %u%%  %.2fV",
+                static_cast<unsigned>(batteryPercent),
+                static_cast<double>(batteryVoltage));
   printCentered(1, line, 0);
 
 }

@@ -27,6 +27,7 @@ struct DisplayState {
 
 struct BatteryState {
   uint8_t percent = 0;
+  float voltage = 0.0f;
   unsigned long lastPollMs = 0;
 };
 
