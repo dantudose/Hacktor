@@ -270,6 +270,7 @@ void handlePendingSleep(graphics::Graphics &display) {
   powerState.displayOn = false;
   power_manager::sleepUntilTilt();
   power_manager::panelSleep(false);
+  system_stats::recordScreenOnEvent();
   imu::setAccelODR(0x40);
 
   time_keeper::applyElapsedWalltime();

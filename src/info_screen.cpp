@@ -116,7 +116,10 @@ void draw(graphics::Graphics &display, const system_stats::Stats &stats, const t
   printCentered(1, dateLine, 6);
 
   std::snprintf(line, sizeof(line), "Reset reason: %s", resetReasonToString(stats.lastResetReason));
-  printCentered(1, line, 6);
+  printCentered(1, line, 4);
+
+  std::snprintf(line, sizeof(line), "Screen wakes: %lu", static_cast<unsigned long>(stats.screenTurnOns));
+  printCentered(1, line, 4);
 
   std::snprintf(line, sizeof(line), "Battery: %u%%  %.2fV",
                 static_cast<unsigned>(batteryPercent),
